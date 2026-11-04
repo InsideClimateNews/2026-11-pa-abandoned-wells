@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Pennsylvania Wells Map</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+
+    <script src="https://unpkg.com/maplibre-gl@4.1.1/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@4.1.1/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/pmtiles@3.2.0/dist/pmtiles.js"></script>
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+    <script src="https://unpkg.com/flatgeobuf@3.22.0/dist/flatgeobuf-geojson.min.js"></script>
+
+    <style>
+        body { margin: 0; padding: 0; font-family: sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+
+        #search-box {
+            position: relative;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 14px;
+            border-radius: 8px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 310px;
+            box-sizing: border-box;
+        }
+
+        .search-instructions {
+            font-size: 13px;
+            line-height: 1.4;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .search-controls {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .input-wrapper { 
+            position: relative; 
+            flex-grow: 1;
+        }
+
+        #address-input {
+            width: 100%;
+            padding: 9px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 13px;
+            box-sizing: border-box;
+        }
+
+        #suggestions {
+            position: absolute;
+            width: 100%;
+            background: white;
+            border: 1px solid #ccc;
+            border-top: none;
+            display: none;
+            max-height: 200px;
+            overflow-y: auto;
+            border-radius: 0 0 4px 4px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 1001;
+        }
+
+        #suggestions div {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            font-size: 13px;
+        }
+
+        #suggestions div:hover { background-color: #f8f8f8; }
+
+        #execute-search {
+            padding: 9px 12px;
+            background: #666666;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        #execute-search:hover { background: #555555; }
+
+        .search-footer {
+            font-size: 11px;
+            line-height: 1.4;
+            color: #666;
+            border-top: 1px solid #eee;
+            padding-top: 8px;
+            margin-top: 2px;
+        }
+
+        .search-footer p {
+            margin: 0 0 4px 0;
+        }
+
+        .search-footer p:last-child {
+            margin-bottom: 0;
+        }
+
+        .search-footer a {
+            color: #3ab07a;
+            text-decoration: none;
+        }
+
+        .search-footer a:hover {
+            text-decoration: none;
+        }
+
+        #basemap-toggle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 3px;
+            border-radius: 6px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.15);
+            display: flex;
+            gap: 2px;
+        }
+
+        .toggle-btn {
+            border: none;
+            background: transparent;
+            padding: 5px 10px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            color: #444;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .toggle-btn.active {
+            background: #666666;
+            color: white;
+        }
+
+        .maplibregl-ctrl-top-right {
+            top: 40px !important;
+        }
+
+        .maplibregl-ctrl-attrib,
+        .maplibregl-ctrl-attrib a {
+            color: rgba(0, 0, 0, 0.4) !important;
+            font-size: 11px;
+        }
+
+        .maplibregl-ctrl-attrib a:hover {
+            color: rgba(0, 0, 0, 0.7) !important;
+            text-decoration: underline;
+        }
+
+        .maplibregl-popup-content {
+            padding: 8px 10px;
+        }
+
+        .distance-info {
+            position: relative;
+            margin-top: 20px;
+            left: 10px;
+            font-size: 11px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.15);
+            display: none;
+            z-index: 1000;
+            width: 310px;
+            box-sizing: border-box;
+            line-height: 1.6;
+        }
+
+        #legend {
+            position: absolute;
+            bottom: 40px;
+            right: 15px;
+            background: white;
+            padding: 12px 15px;
+            border-radius: 6px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            z-index: 1000;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 6px;
+        }
+
+        .legend-key {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+            border: 1px solid rgba(0, 0, 0, 0.15);
+        }
+
+        .photos-toggle-btn {
+            margin-top: 8px;
+            padding: 6px 10px;
+            background: #a9a9a9;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .photos-toggle-btn:hover { background: #d3d3d3; }
+
+        .photo-lightbox {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+        }
+        .photo-lightbox.open { display: flex; }
+
+        .lightbox-img {
+            max-width: 85vw;
+            max-height: 85vh;
+            object-fit: contain;
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 32px;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .lightbox-close:hover { color: #ccc; }
+
+        .lightbox-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255,255,255,0.15);
+            border: none;
+            color: white;
+            font-size: 40px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .lightbox-nav:hover { background: rgba(255,255,255,0.3); }
+        .lightbox-prev { left: 20px; }
+        .lightbox-next { right: 20px; }
+
+        .lightbox-caption {
+            position: absolute;
+            bottom: 24px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: white;
+            font-size: 14px;
+        }
+
+        .lightbox-img.loading {
+            opacity: 0.3;
+        }
+
+        .lightbox-spinner {
+            display: none;
+            position: absolute;
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255,255,255,0.25);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: lightbox-spin 0.8s linear infinite;
+        }
+
+        .lightbox-spinner.visible {
+            display: block;
+        }
+
+        @keyframes lightbox-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #icn-logo {
+            position: absolute;
+            bottom: 40px;
+            left: 15px;
+            width: 80px;
+            z-index: 1000;
+            pointer-events: none;
+            border-radius: 4px;
+        }
+
+        /* responsive rules for small mobile viewports (e.g., iPhone SE, 13 Mini) */
+        @media only screen and (max-width: 480px) {
+
+            #search-box {
+                width: 250px;
+                top: 8px;
+                left: 8px;
+                padding: 10px;
+                gap: 6px;
+            }
+
+            .distance-info {
+                width: 250px;
+            }
+
+            .search-instructions {
+                font-size: 11.5px;
+                line-height: 1.3;
+            }
+
+            #address-input {
+                padding: 7px;
+                font-size: 12px;
+            }
+
+            #execute-search {
+                padding: 7px 10px;
+                font-size: 11px;
+            }
+
+            .search-footer {
+                font-size: 10px;
+                line-height: 1.3;
+            }
+
+            .search-footer a,
+            .search-footer a:hover {
+                text-decoration: none;
+            }
+
+            #basemap-toggle {
+                top: 8px;
+                right: 8px;
+                padding: 2px;
+            }
+
+            #basemap-toggle .toggle-btn {
+                padding: 3px 6px;
+                font-size: 10px;
+                border-radius: 3px;
+            }
+
+            #legend {
+                right: 8px;
+                padding: 8px 10px;
+                font-size: 11px;
+                bottom: 45px;
+            }
+
+            #icn-logo {
+                bottom: 45px;
+            }
+
+            .maplibregl-ctrl-attrib,
+            .maplibregl-ctrl-attrib a {
+                font-size: 10px;
+            }
+
+        }
+
+
+    </style>
+
+</head>
+
+<body>
+
+<div id="search-box">
+    <div class="search-instructions">
+        Enter your address to find the nearest oil or gas well and its status.
+    </div>
+    <div class="search-controls">
+        <div class="input-wrapper">
+            <input type="text" id="address-input" placeholder="Address..." autocomplete="off">
+            <div id="suggestions"></div>
+        </div>
+        <button id="execute-search">Search</button>
+    </div>
+    <div class="search-footer">
+        <p><b>Source</b>: Pennsylvania Department of Environmental Protection, data fetched <span id="data-update-date"></span>.</p>
+        <p><b>Analysis/development</b>: Peter Aldhous, <a href="https://" target="_blank">methods</a>.</p>
+    </div>
+</div>
+
+<div id="basemap-toggle">
+    <button id="btn-map" class="toggle-btn active">Map</button>
+    <button id="btn-satellite" class="toggle-btn">Satellite</button>
+</div>
+
+<div id="map"></div>
+
+<img id="icn-logo" src="img/icn.png" alt="Inside Climate News Logo">
+
+<div id="legend">
+    <div class="legend-item">
+        <span class="legend-key" style="background-color: #f7d13d; opacity: 0.6;"></span>
+        <span>Active/Other</span>
+    </div>
+    <div class="legend-item">
+        <span class="legend-key" style="background-color: #ed6925; opacity: 0.6;"></span>
+        <span>Plugged</span>
+    </div>
+    <div class="legend-item">
+        <span class="legend-key" style="background-color: #a52c60; opacity: 0.6;"></span>
+        <span>Abandoned/Orphaned</span>
+    </div>
+    <div class="legend-item">
+        <span class="legend-key" style="background-color: #4a0c6b; opacity: 0.6;"></span>
+        <span>Historical</span>
+    </div>
+</div>
+
+<div id="distance-info" class="distance-info"></div>
+
+<div id="photo-lightbox" class="photo-lightbox">
+    <button id="lightbox-close" class="lightbox-close">✕</button>
+    <button id="lightbox-prev" class="lightbox-nav lightbox-prev">‹</button>
+    <div id="lightbox-spinner" class="lightbox-spinner"></div>
+    <img id="lightbox-img" class="lightbox-img" src="" alt="">
+    <button id="lightbox-next" class="lightbox-nav lightbox-next">›</button>
+    <div id="lightbox-caption" class="lightbox-caption"></div>
+</div>
+
+<script src="map_data/data_date.js"></script>
+
+<script>
+
+    // date of last data update
+    document.getElementById('data-update-date').textContent = typeof dataLastUpdated !== 'undefined' ? dataLastUpdated : 'N/A';
+
+    // photo lightbox
+    let currentPhotos = [];
+    let currentPhotoIndex = 0;
+
+    function openLightbox(photos, startIndex = 0) {
+        currentPhotos = photos;
+        currentPhotoIndex = startIndex;
+        updateLightboxImage();
+        document.getElementById('photo-lightbox').classList.add('open');
+    }
+
+    function closeLightbox() {
+        document.getElementById('photo-lightbox').classList.remove('open');
+    }
+
+    function changePhoto(direction) {
+        currentPhotoIndex = (currentPhotoIndex + direction + currentPhotos.length) % currentPhotos.length;
+        updateLightboxImage();
+    }
+
+    function updateLightboxImage() {
+        const img = document.getElementById('lightbox-img');
+        const spinner = document.getElementById('lightbox-spinner');
+
+        img.classList.add('loading');
+        spinner.classList.add('visible');
+
+        img.onload = () => {
+            img.classList.remove('loading');
+            spinner.classList.remove('visible');
+        };
+
+        img.src = currentPhotos[currentPhotoIndex];
+        img.alt = `Well photo ${currentPhotoIndex + 1} of ${currentPhotos.length}`;
+        document.getElementById('lightbox-caption').textContent =
+            `Photo ${currentPhotoIndex + 1} of ${currentPhotos.length}`;
+    }
+
+    // lightbox controls
+    document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
+    document.getElementById('lightbox-prev').addEventListener('click', () => changePhoto(-1));
+    document.getElementById('lightbox-next').addEventListener('click', () => changePhoto(1));
+
+    document.getElementById('photo-lightbox').addEventListener('click', (e) => {
+        if (e.target.id === 'photo-lightbox') closeLightbox();
+    });
+
+    document.addEventListener('keydown', (e) => {
+        const lightbox = document.getElementById('photo-lightbox');
+        if (!lightbox.classList.contains('open')) return;
+        if (e.key === 'Escape') closeLightbox();
+        if (e.key === 'ArrowLeft') changePhoto(-1);
+        if (e.key === 'ArrowRight') changePhoto(1);
+    });
+
+    // well info renderer
+    function showWellInfoPanel(props, options = {}) {
+        const { address, displayDistance } = options;
+
+        const turfKeys = ['featureIndex', 'distanceToPoint'];
+        const featureKeys = Object.keys(props).filter(k => !turfKeys.includes(k));
+
+        let wellStatus;
+        if (props.well_status) {
+            wellStatus = props.well_status;
+        } else {
+            const statusKey = featureKeys.find(k => /stat/i.test(k) && k !== 'pf_stat');
+            if (statusKey && props[statusKey]) {
+                wellStatus = props[statusKey];
+            } else if (featureKeys.length > 0) {
+                wellStatus = `N/A (Keys found: ${featureKeys.join(', ')})`;
+            } else {
+                wellStatus = "N/A (No properties found)";
+            }
+        }
+
+        const apiKey = featureKeys.find(k => /^api$/i.test(k) || /^api_num/i.test(k)) || 'API';
+        const rawApi = props[apiKey] ?? props.API ?? props.api;
+
+        let apiNumber = "N/A";
+        if (rawApi !== null && rawApi !== undefined) {
+            const val = String(rawApi).trim();
+            if (val.length > 0 && val.toLowerCase() !== 'null' && val.toLowerCase() !== 'none') {
+                apiNumber = val;
+            }
+        }
+
+        let location = "N/A";
+        if (props.municipality && props.county) {
+            location = `${props.municipality}, ${props.county}`;
+        } else if (props.municipality || props.county) {
+            location = props.municipality || props.county;
+        }
+
+        let coords = "N/A";
+        if (props.latitude && props.longitude) {
+            const lat = Number(props.latitude).toFixed(5);
+            const lng = Number(props.longitude).toFixed(5);
+            coords = `${lat}°, ${lng}°`;
+        }
+
+        const wellName = props.well_name || "N/A";
+
+        let photoUrls = [];
+        if (props.photos) {
+            try {
+                photoUrls = JSON.parse(props.photos);
+            } catch (e) {
+                photoUrls = [];
+            }
+        }
+
+        let photosSection = '';
+        if (photoUrls.length > 0) {
+            photosSection = `<br><button id="toggle-photos" class="photos-toggle-btn">📷 See photos</button>`;
+        }
+
+        let headerLines = '';
+        if (address) {
+            headerLines += `<strong>Search address:</strong> ${address}<br>`;
+        }
+        if (displayDistance) {
+            headerLines += `<strong>Distance:</strong> ${displayDistance}<br>`;
+        }
+
+        const infoDiv = document.getElementById('distance-info');
+        infoDiv.style.display = 'block';
+        infoDiv.innerHTML = `
+            <div style="font-size: 11px; line-height: 1.3;">
+                ${headerLines}
+                <strong>Well status:</strong> ${wellStatus}<br>
+                <strong>Well name:</strong> ${wellName}<br> 
+                <strong>Well ID (API):</strong> ${apiNumber}<br>
+                <strong>Municipality:</strong> ${location} County<br>
+                <strong>Latitude, Longitude:</strong> ${coords}<br>
+                ${photosSection}
+            </div>
+        `;
+
+        if (photoUrls.length > 0) {
+            document.getElementById('toggle-photos').addEventListener('click', () => openLightbox(photoUrls));
+        }
+    }
+
+    // setup protocol and map
+    const protocol = new pmtiles.Protocol();
+    maplibregl.addProtocol("pmtiles", (request, callback) => {
+        return protocol.tile(request, callback);
+    });
+
+    const map = new maplibregl.Map({
+        container: 'map',
+        // OpenFreeMap Positron (vector, free, no API key); labels are kept and drawn above the wells
+        style: 'https://tiles.openfreemap.org/styles/positron',
+        bounds: [[-80.519891, 39.7198], [-74.689517, 42.269247]],
+        fitBoundsOptions: { padding: 40 },
+        scrollZoom: false,
+        maxZoom: 18
+    });
+
+    map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+    const scaleControl = new maplibregl.ScaleControl({
+        maxWidth: 80,
+        unit: 'imperial' 
+    });
+
+    map.addControl(scaleControl, 'bottom-left');
+    
+    map.on('load', () => {
+
+        // first label layer in the basemap style; layers inserted before it sit beneath the labels
+        const firstLabelLayer = map.getStyle().layers.find(l => l.type === 'symbol');
+        const firstLabelId = firstLabelLayer ? firstLabelLayer.id : undefined;
+
+        map.addSource('satellite-source', {
+            'type': 'raster',
+            'tiles': [
+                'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+            ],
+            'tileSize': 256,
+            'attribution': 'Esri, Maxar, Earthstar Geographics'
+        });
+
+        map.addLayer({
+            'id': 'satellite-layer',
+            'type': 'raster',
+            'source': 'satellite-source',
+            'layout': {
+                'visibility': 'none'
+            }
+        }, firstLabelId);
+
+        map.addSource('wells-source', {
+            type: 'vector',
+            url: 'pmtiles://map_data/pa_wells_csv.pmtiles'
+        });
+
+        map.addLayer({
+            'id': 'wells-layer',
+            'type': 'circle',
+            'source': 'wells-source',
+            'source-layer': 'pa_wells',
+            'paint': {
+                'circle-color': [
+                    'match',
+                    ['get', 'well_status'], 
+                    'Active/Other', '#f7d13d', 
+                    'Plugged', '#ed6925', 
+                    'Abandoned/Orphaned', '#a52c60',
+                    'Historical', '#4a0c6b', 
+                    '#ccc' 
+                ],
+                'circle-radius': [
+                    'interpolate',
+                    ['linear'],
+                    ['zoom'],
+                    6, 1.5,
+                    10, 6.5,
+                    13.5, [
+                        'case',
+                        ['==', ['get', 'historical'], 'Yes'], 8.8,
+                        10.3
+                    ],
+                    15, [
+                        'case',
+                        ['==', ['get', 'historical'], 'Yes'], 10,
+                        11.5
+                    ]
+                ],
+                'circle-opacity': 0.6
+            }
+        }, firstLabelId);
+
+        // search point and connecting line are added without a beforeId, so they draw on top of the labels
+
+        map.addSource('search-point', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+        });
+
+        map.addLayer({
+            'id': 'search-layer',
+            'type': 'circle',
+            'source': 'search-point',
+            'paint': {
+                'circle-color': '#000000',
+                'circle-radius': 8,
+                'circle-stroke-width': 1.5,
+                'circle-stroke-color': '#fff'
+            }
+        });
+
+        map.addSource('connecting-line', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+        });
+
+        map.addLayer({
+            'id': 'line-casing-layer',
+            'type': 'line',
+            'source': 'connecting-line',
+            'paint': {
+                'line-color': '#ffffff',
+                'line-width': 3
+            }
+        });
+
+        map.addLayer({
+            'id': 'line-layer',
+            'type': 'line',
+            'source': 'connecting-line',
+            'paint': {
+                'line-color': '#000000',
+                'line-width': 2,
+                'line-dasharray': [2, 2]
+            }
+        });
+    });
+
+    // basemap toggle listeners
+    const btnMap = document.getElementById('btn-map');
+    const btnSatellite = document.getElementById('btn-satellite');
+
+    btnMap.addEventListener('click', () => {
+        btnMap.classList.add('active');
+        btnSatellite.classList.remove('active');
+        map.setLayoutProperty('satellite-layer', 'visibility', 'none');
+    });
+
+    btnSatellite.addEventListener('click', () => {
+        btnSatellite.classList.add('active');
+        btnMap.classList.remove('active');
+        map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
+    });
+
+    // autocomplete logic
+    const addressInput = document.getElementById('address-input');
+    const suggestionsDiv = document.getElementById('suggestions');
+    let debounceTimer;
+    let selectedFeature = null;   // the suggestion the user clicked
+    let lastTyped = '';           // what the user actually typed (keeps the house number)
+    let suggestRequestId = 0;     // bumped on each new request or search, so stale suggestions are ignored
+
+    // fuller label for Photon results
+    function photonLabel(p) {
+        const street = [p.housenumber, p.street].filter(Boolean).join(' ');
+        const place = p.city || p.town || p.village || p.district || p.county;
+        const name = (p.name && p.name !== p.street) ? p.name : null;
+        const stateZip = [p.state, p.postcode].filter(Boolean).join(' ');
+        return [name, street, place, stateZip].filter(Boolean).join(', ');
+    }
+
+    // US Census geocoder via JSONP (TIGER address-range interpolation)
+    function censusGeocode(address) {
+        if (!/\b(PA|Pennsylvania)\b/i.test(address)) address += ', PA';
+        return new Promise(resolve => {
+            const cb = 'censusCb_' + Date.now();
+            const script = document.createElement('script');
+            const finish = result => {
+                clearTimeout(timer);
+                window[cb] = () => {};   // ignore a late response
+                script.remove();
+                resolve(result);
+            };
+            const timer = setTimeout(() => finish(null), 4000);
+            window[cb] = data => {
+                const m = data && data.result && data.result.addressMatches && data.result.addressMatches[0];
+                if (!m) return finish(null);
+                const { x, y } = m.coordinates;
+                if (x < -80.6 || x > -74.6 || y < 39.6 || y > 42.4) return finish(null);  // outside PA
+                finish({
+                    type: 'Feature',
+                    geometry: { type: 'Point', coordinates: [x, y] },
+                    properties: {}
+                });
+            };
+            script.onerror = () => finish(null);
+            script.src = 'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?' +
+                new URLSearchParams({ address, benchmark: 'Public_AR_Current', format: 'jsonp', callback: cb });
+            document.head.appendChild(script);
+        });
+    }
+
+    addressInput.addEventListener('input', () => {
+        selectedFeature = null;
+        lastTyped = addressInput.value;
+        document.getElementById('distance-info').style.display = 'none';
+
+        clearTimeout(debounceTimer);
+        const query = addressInput.value;
+        if (query.length < 3) { suggestionsDiv.style.display = 'none'; return; }
+
+        debounceTimer = setTimeout(async () => {
+            const requestId = ++suggestRequestId;
+            try {
+                const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&bbox=-80.5,39.7,-74.7,42.3`;
+                const response = await fetch(url);
+                const data = await response.json();
+                if (requestId !== suggestRequestId) return;   // a search started, or newer typing, since this request
+
+                if (data.features && data.features.length > 0) {
+                    suggestionsDiv.innerHTML = '';
+                    suggestionsDiv.style.display = 'block';
+                    data.features.forEach(f => {
+                        const label = photonLabel(f.properties);
+                        const div = document.createElement('div');
+                        div.textContent = label;
+                        div.onclick = () => {
+                            addressInput.value = label;
+                            selectedFeature = f;
+                            suggestionsDiv.style.display = 'none';
+                            document.getElementById('execute-search').click();
+                        };
+                        suggestionsDiv.appendChild(div);
+                    });
+                } else { suggestionsDiv.style.display = 'none'; }
+            } catch (err) { console.error(err); }
+        }, 200);
+    });
+
+    // search and nearest well logic
+    document.getElementById('execute-search').addEventListener('click', async () => {
+        // close suggestions and cancel any that are still on their way
+        clearTimeout(debounceTimer);
+        suggestRequestId++;
+        suggestionsDiv.style.display = 'none';
+
+        const query = addressInput.value;
+        if (!query) return;
+
+        try {
+            let searchResult = selectedFeature;
+            if (!searchResult) {
+                const geocodeUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&bbox=-80.5,39.7,-74.7,42.3`;
+                const response = await fetch(geocodeUrl);
+                const data = await response.json();
+                searchResult = data.features[0] || null;
+            }
+
+            // typed a house number but Photon didn't match that exact number: try the Census geocoder
+            const typed = lastTyped || query;
+            const numMatch = typed.match(/^\s*(\d+)/);
+            const typedNumber = numMatch ? numMatch[1] : null;
+            const photonNumber = searchResult && searchResult.properties && searchResult.properties.housenumber;
+            if (typedNumber && String(photonNumber || '') !== typedNumber) {
+                const census = await censusGeocode(typed);
+                if (census) searchResult = census;
+            }
+
+            if (!searchResult) {
+                alert("Location not found.");
+                return;
+            }
+
+            const searchCoords = searchResult.geometry.coordinates;
+            const searchPoint = turf.point(searchCoords);
+
+            map.getSource('search-point').setData(searchResult);
+
+            let features = [];
+            const searchRadii = [10, 100, 1000]; 
+            
+            for (const radius of searchRadii) {
+                const buffer = turf.buffer(searchPoint, radius, {units: 'kilometers'});
+                const bbox = turf.bbox(buffer);
+                const rect = { minX: bbox[0], minY: bbox[1], maxX: bbox[2], maxY: bbox[3] };
+
+                const iter = flatgeobuf.deserialize('map_data/pa_wells_csv.fgb', rect);
+                for await (let feature of iter) { features.push(feature); }
+                if (features.length > 0) break;
+            }
+
+            if (features.length > 0) {
+                const fc = turf.featureCollection(features);
+                const nearest = turf.nearestPoint(searchPoint, fc);
+                
+                const distKm = turf.distance(searchPoint, nearest, {units: 'kilometers'});
+                const distMiles = distKm * 0.621371;
+        
+                let displayDistance;
+                if (distMiles >= 0.2) {
+                    displayDistance = `${distMiles.toFixed(1)} miles`;
+                } else {
+                    const distFeet = Math.round(distMiles * 5280);
+                    displayDistance = `${distFeet.toLocaleString()} feet`;
+                }
+
+                map.getSource('connecting-line').setData({
+                    'type': 'Feature',
+                    'geometry': {
+                        'type': 'LineString',
+                        'coordinates': [searchCoords, nearest.geometry.coordinates]
+                    }
+                });
+
+                const resultBbox = turf.bbox(turf.featureCollection([searchPoint, nearest]));
+                if (distMiles < 1) {
+                    const midpoint = turf.midpoint(searchPoint, nearest);
+                    map.flyTo({
+                        center: midpoint.geometry.coordinates,
+                        zoom: 14, 
+                        essential: true
+                    });
+                } else {
+                    map.fitBounds(resultBbox, { padding: 200 });
+                }
+
+                const props = nearest.properties || {};
+
+                showWellInfoPanel(props, { displayDistance });
+            } else {
+                alert("No wells found.");
+            }
+        } catch (err) {
+            console.error("Search failed:", err);
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (e.target !== addressInput) suggestionsDiv.style.display = 'none';
+    });
+
+    // reusable popup instance
+    const hoverPopup = new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 10
+    });
+
+    map.on('mousemove', 'wells-layer', (e) => {
+        if (map.getZoom() < 10) {
+            map.getCanvas().style.cursor = '';
+            hoverPopup.remove();
+            return;
+        }
+
+        map.getCanvas().style.cursor = 'pointer';
+
+        const props = e.features[0].properties || {};
+        const wellStatus = props.well_status || "N/A";
+        // const historical = props.historical;
+        const apiNum = props.api || "N/A";
+
+        let popupContent = `<div style="font-size:11px; line-height:1.4;">`;
+        popupContent += `<strong>Well status</strong>: ${wellStatus}`;
+        if (apiNum) popupContent += `<br><strong>Well ID (API): </strong><span style="color:#666;">${apiNum}</span>`;
+        popupContent += `</div>`;
+
+        hoverPopup
+            .setLngLat(e.lngLat)
+            .setHTML(popupContent)
+            .addTo(map);
+    });
+
+    map.on('mouseleave', 'wells-layer', () => {
+        map.getCanvas().style.cursor = '';
+        hoverPopup.remove();
+    });
+
+    // click on well logic
+    map.on('click', 'wells-layer', (e) => {
+        const props = e.features[0].properties || {};
+        showWellInfoPanel(props);
+    });
+
+</script>
+
+</body>
+</html>

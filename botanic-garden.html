@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Pennsylvania Wells Map</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+
+    <script src="https://unpkg.com/maplibre-gl@4.1.1/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@4.1.1/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/pmtiles@3.2.0/dist/pmtiles.js"></script>
+
+    <style>
+        body { margin: 0; padding: 0; font-family: sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+
+        /* Custom attribution styling */
+        .maplibregl-ctrl-attrib,
+        .maplibregl-ctrl-attrib a {
+            color: rgba(0, 0, 0, 0.4) !important;
+            font-size: 11px;
+        }
+
+        .maplibregl-ctrl-attrib a:hover {
+            color: rgba(0, 0, 0, 0.7) !important;
+            text-decoration: underline;
+        }
+
+        #legend {
+            position: absolute;
+            bottom: 40px;
+            right: 15px;
+            background: white;
+            padding: 12px 15px;
+            border-radius: 6px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            z-index: 1000;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 6px;
+        }
+
+        .legend-key {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+            border: 1px solid rgba(0, 0, 0, 0.15);
+        }
+
+        .legend-key-box {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            display: inline-block;
+            flex-shrink: 0;
+            background: transparent;
+            border: 1px solid #000000;
+            box-sizing: border-box;
+        }
+
+        #icn-logo {
+            position: absolute;
+            bottom: 40px;
+            left: 15px;
+            width: 80px;
+            z-index: 1000;
+            pointer-events: none;
+            border-radius: 4px;
+        }
+
+        /* SVG Callout Overlay */
+        #callout-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1500;
+        }
+
+        /* Offset Callout Label Card */
+        .well-callout-label {
+            position: absolute;
+            background: #ffffff;
+            padding: 6px 10px;
+            border-radius: 5px;
+            border: 1px solid #111111;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            font-family: sans-serif;
+            font-size: 13px;
+            font-weight: bold;
+            color: #111111;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 1501;
+        }
+
+        @media only screen and (max-width: 480px) {
+            #legend {
+                right: 8px;
+                padding: 8px 10px;
+                font-size: 11px;
+                bottom: 45px;
+            }
+
+            #icn-logo {
+                bottom: 45px;
+            }
+
+            .maplibregl-ctrl-attrib,
+            .maplibregl-ctrl-attrib a {
+                font-size: 10px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<!-- SVG overlay for rendering the callout pointer arc and arrowhead -->
+<svg id="callout-svg">
+    <defs>
+        <!-- Arrowhead Marker -->
+        <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#111111" />
+        </marker>
+    </defs>
+    <!-- Casing line for halo contrast -->
+    <path id="callout-arc-casing" fill="none" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" />
+    <!-- Solid main line -->
+    <path id="callout-arc" fill="none" stroke="#111111" stroke-width="2" stroke-linecap="round" marker-end="url(#arrowhead)" />
+</svg>
+
+<!-- Floating Label Card -->
+<div id="callout-label" class="well-callout-label">Jane McGill #1</div>
+
+<img id="icn-logo" src="img/icn.png" alt="Inside Climate News Logo">
+
+<div id="legend">
+    <div class="legend-item">
+        <span class="legend-key" style="background-color: #f7d13d; opacity: 0.6;"></span>
+        <span>Active/Other</span>
+    </div>
+    <div class="legend-item">
+        <span class="legend-key" style="background-color: #ed6925; opacity: 0.6;"></span>
+        <span>Plugged</span>
+    </div>
+    <div class="legend-item">
+        <span class="legend-key" style="background-color: #a52c60; opacity: 0.6;"></span>
+        <span>Abandoned/Orphaned</span>
+    </div>
+    <div class="legend-item">
+        <span class="legend-key" style="background-color: #4a0c6b; opacity: 0.6;"></span>
+        <span>Historical</span>
+    </div>
+    <div class="legend-item">
+        <span class="legend-key-box"></span>
+        <span>Pittsburgh Botanic Garden</span>
+    </div>
+</div>
+
+<script>
+    const wellCoords = [-80.17679, 40.40959];
+
+    // Register PMTiles Protocol
+    const protocol = new pmtiles.Protocol();
+    maplibregl.addProtocol("pmtiles", (request, callback) => {
+        return protocol.tile(request, callback);
+    });
+
+    // Initialize Map with zoom and pan interaction disabled
+    const map = new maplibregl.Map({
+        container: 'map',
+        style: 'https://tiles.openfreemap.org/styles/positron',
+        center: wellCoords,
+        zoom: 14,
+        interactive: false,
+        dragPan: false,
+        scrollZoom: false,
+        boxZoom: false,
+        dragRotate: false,
+        keyboard: false,
+        doubleClickZoom: false,
+        touchZoomRotate: false
+    });
+
+    const scaleControl = new maplibregl.ScaleControl({
+        maxWidth: 80,
+        unit: 'imperial' 
+    });
+
+    map.addControl(scaleControl, 'bottom-left');
+
+    map.on('load', () => {
+
+        const firstLabelLayer = map.getStyle().layers.find(l => l.type === 'symbol');
+        const firstLabelId = firstLabelLayer ? firstLabelLayer.id : undefined;
+
+        // Load Botanic Garden GeoJSON source
+        map.addSource('botanic-garden-source', {
+            type: 'geojson',
+            data: 'map_data/botanic_garden.geojson'
+        });
+
+        // Transparent fill layer
+        map.addLayer({
+            'id': 'botanic-garden-fill',
+            'type': 'fill',
+            'source': 'botanic-garden-source',
+            'paint': {
+                'fill-color': '#000000',
+                'fill-opacity': 0
+            }
+        }, firstLabelId);
+
+        // Black outline border layer
+        map.addLayer({
+            'id': 'botanic-garden-border',
+            'type': 'line',
+            'source': 'botanic-garden-source',
+            'paint': {
+                'line-color': '#000000',
+                'line-width': 1
+            }
+        }, firstLabelId);
+
+        map.addSource('wells-source', {
+            type: 'vector',
+            url: 'pmtiles://map_data/pa_wells_csv.pmtiles'
+        });
+
+        map.addLayer({
+            'id': 'wells-layer',
+            'type': 'circle',
+            'source': 'wells-source',
+            'source-layer': 'pa_wells',
+            'paint': {
+                'circle-color': [
+                    'match',
+                    ['get', 'well_status'], 
+                    'Active/Other', '#f7d13d', 
+                    'Plugged', '#ed6925', 
+                    'Abandoned/Orphaned', '#a52c60',
+                    'Historical', '#4a0c6b', 
+                    '#ccc' 
+                ],
+                'circle-radius': [
+                    'interpolate',
+                    ['linear'],
+                    ['zoom'],
+                    6, 1.5,
+                    10, 6.5,
+                    13.5, [
+                        'case',
+                        ['==', ['get', 'historical'], 'Yes'], 8.8,
+                        10.3
+                    ],
+                    15, [
+                        'case',
+                        ['==', ['get', 'historical'], 'Yes'], 10,
+                        11.5
+                    ]
+                ],
+                'circle-opacity': 0.6
+            }
+        }, firstLabelId);
+
+        // Highlight layer with black stroke around Jane McGill #1
+        map.addSource('jane-mcgill-well', {
+            'type': 'geojson',
+            'data': {
+                'type': 'FeatureCollection',
+                'features': [{
+                    'type': 'Feature',
+                    'geometry': {
+                        'type': 'Point',
+                        'coordinates': wellCoords
+                    }
+                }]
+            }
+        });
+
+        map.addLayer({
+            'id': 'jane-mcgill-circle-stroke',
+            'type': 'circle',
+            'source': 'jane-mcgill-well',
+            'paint': {
+                'circle-radius': 11,
+                'circle-opacity': 0,
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#000000'
+            }
+        });
+
+        updateCallout();
+    });
+
+// Draw and align the curved pointer line and label card
+    function updateCallout() {
+        const wellPos = map.project(wellCoords);
+        const labelEl = document.getElementById('callout-label');
+        
+        // Offset label position relative to well center (shifted left)
+        const offsetLeft = 45;
+        const offsetTop = -110;
+        
+        const labelX = wellPos.x + offsetLeft;
+        const labelY = wellPos.y + offsetTop;
+
+        labelEl.style.left = labelX + 'px';
+        labelEl.style.top = labelY + 'px';
+
+        const labelWidth = labelEl.offsetWidth;
+        const labelHeight = labelEl.offsetHeight;
+
+        // Start path at bottom-center of label card
+        const startX = labelX + (labelWidth / 2);
+        const startY = labelY + labelHeight;
+
+        // Well circle radius (11) + stroke width (2) + slight gap buffer (2) = 15px stop distance
+        const targetRadius = 15;
+
+        // Curved arc control point (increased curve)
+        const ctrlX = (startX + wellPos.x) / 2 + 65;
+        const ctrlY = (startY + wellPos.y) / 2 - 20;
+
+        // Quadratic Bezier tangent vector at t = 1 (approaching well center)
+        const tangentX = wellPos.x - ctrlX;
+        const tangentY = wellPos.y - ctrlY;
+        const dist = Math.hypot(tangentX, tangentY) || 1;
+
+        // Offset end point to terminate arrowhead just outside circle stroke
+        const endX = wellPos.x - (tangentX / dist) * targetRadius;
+        const endY = wellPos.y - (tangentY / dist) * targetRadius;
+
+        const pathData = `M ${startX} ${startY} Q ${ctrlX} ${ctrlY} ${endX} ${endY}`;
+
+        document.getElementById('callout-arc').setAttribute('d', pathData);
+        document.getElementById('callout-arc-casing').setAttribute('d', pathData);
+    }
+
+    map.on('render', updateCallout);
+</script>
+
+</body>
+</html>
