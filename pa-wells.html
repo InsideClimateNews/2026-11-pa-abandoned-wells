@@ -653,7 +653,7 @@
 
         map.addSource('wells-source', {
             type: 'vector',
-            url: 'pmtiles://map_data/pa_wells_csv.pmtiles'
+            url: 'pmtiles://map_data/pa_wells.pmtiles'
         });
 
         map.addLayer({
@@ -886,7 +886,7 @@
                 const bbox = turf.bbox(buffer);
                 const rect = { minX: bbox[0], minY: bbox[1], maxX: bbox[2], maxY: bbox[3] };
 
-                const iter = flatgeobuf.deserialize('map_data/pa_wells_csv.fgb', rect);
+                const iter = flatgeobuf.deserialize('map_data/pa_wells.fgb', rect);
                 for await (let feature of iter) { features.push(feature); }
                 if (features.length > 0) break;
             }
