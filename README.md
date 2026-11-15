@@ -1,12 +1,12 @@
 # Pennsylvania Oil and Gas Wells
 
-This repository contains code used to make the interactive map displayed in stories in the series [Abandoned](https://), published by Inside Climate News and the Pittsburgh Post-Gazette.
+This repository contains code used to make the interactive map displayed in stories in the series [Abandoned](https://insideclimatenews.org/project/abandoned/), published by Inside Climate News and the Pittsburgh Post-Gazette.
 
 ### Methods
 
 We simplified the Pennsylvania Department of Environmental Protection's system for classifying wells into four categories:
 
-**Active/Other.** These are mostly wells that are still producing oil or gas.However, the state’s active category includes wells that have no other status description, which means that some disused wells may be mistakenly included. We have also included a small number of wells with “[regulatory inactive status](https://www.law.cornell.edu/regulations/pennsylvania/25-Pa-Code-SS-78-104),” which allows an operator to shut down production for up to five years without having to seal a well. 
+**Active/Other.** These are mostly wells that are still producing oil or gas. However, the state’s active category includes wells that have no other status description, which means that some disused wells may be mistakenly included. We have also included a small number of wells with “[regulatory inactive status](https://www.law.cornell.edu/regulations/pennsylvania/25-Pa-Code-SS-78-104),” which allows an operator to shut down production for up to five years without having to seal a well. 
 
 **Plugged** wells are recorded as sealed. Most were plugged by contractors hired by their former operators, but some were sealed by the state. Plugging may fail because materials like metal pipe and cement deteriorate over time, so some of these wells may still leak gases.
 
@@ -51,7 +51,7 @@ Locations for wells in our Historical category depend on digitized versions of m
 
 Wells may be misclassified in the state data. For example, Jane McGill #1, an old well on the property of the Pittsburgh Botanic Garden, was at the time of publication listed as active in the Department of Environmental Protection's inventory, but it is actually an abandoned well.
 
-We have only been able to include wells mapped by the agency. Many older wells—possibly several hundred thousand—are missing from the records. In addition, we were unable to map more than 29,000 wells for which the Department of Environmental Protection’s inventory gave no coordinates. About half of these are Plugged wells, almost 6,000 fall into our Abandoned/Orphaned category, the remainder are Active/Other.
+We have only been able to include wells mapped by the agency. Many older wells—possibly several hundred thousand—are missing from the records. In addition, we were unable to map more than 29,000 wells for which the Department of Environmental Protection’s inventory gave no coordinates. About half of these are Plugged wells, almost 6,000 fall into our Abandoned/Orphaned category and the remainder are Active/Other.
 
 ### Interactive map
 
