@@ -61,6 +61,6 @@ The map uses the [photon](https://photon.komoot.io/) geocoder to search [OpenStr
 
 The repository also contains the file `botanic-garden.html`, zoomed in to the Pittsburgh Botanic Garden, showing the location of Jane McGill #1 and nearby wells.
 
-### **Questions/Feedback**
+### **Questions/feedback**
 
 Email [Peter Aldhous](mailto:peter.aldhous@insideclimatenews.org).
